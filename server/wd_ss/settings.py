@@ -12,7 +12,7 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 
 DEBUG = True
 
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost', 'surveilix.onrender.com']
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost', 'forestfiredetection-y938.onrender.com']
 
 INSTALLED_APPS = [
     'django.contrib.admin',
