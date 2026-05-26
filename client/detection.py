@@ -110,7 +110,7 @@ class Detection(QThread):
     def post_detection(self):
         frame_path = SAVED_FRAME_DIR / "frame.jpg"
         try:
-            url = "https://surveilix.onrender.com/api/images/"
+            url = "https://forestfiredetection-y938.onrender.com/api/images/"
             headers = {"Authorization": "Token " + self.token}
             with frame_path.open("rb") as image_file:
                 files = {"image": image_file}

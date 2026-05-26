@@ -18,11 +18,11 @@ class LoginWindow(QMainWindow):
         self.show()
 
     def go_to_register_page(self):
-        webbrowser.open('https://surveilix.onrender.com/register/')
+        webbrowser.open('https://forestfiredetection-y938.onrender.com/register/')
     
     def login(self):
         try:
-            url = 'https://surveilix.onrender.com/api/get_auth_token/'
+            url = 'https://forestfiredetection-y938.onrender.com/api/get_auth_token/'
             response = requests.post(url, data={'username': self.username_input.text(),'password': self.password_input.text()})
             json_response = json.loads(response.text)
 
