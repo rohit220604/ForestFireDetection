@@ -1,0 +1,20 @@
+{% load static %}
+<link rel="stylesheet" type="text/css" href="{% static '/css/navbar.css' %}">
+
+<nav class="navbar navbar-dark ff-navbar justify-content-between">
+	<a class="ff-brand navbar-brand" href="{% url 'home' %}">
+		<span class="ff-brand-icon" aria-hidden="true">🔥</span>
+		<span>
+			FireGuard
+			<span class="ff-brand-sub">Forest Fire Detection</span>
+		</span>
+	</a>
+	<ul class="navbar-nav flex-row ff-nav-user">
+		<li class="nav-item">
+			<span class="hello-msg">Hello, {{ request.user }}!</span>
+		</li>
+		<li class="nav-item ml-3">
+			<a href="{% url 'logout' %}">Logout</a>
+		</li>
+	</ul>
+</nav>

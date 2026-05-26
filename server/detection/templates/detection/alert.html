@@ -1,0 +1,47 @@
+{% extends 'detection/main.html' %}
+{% load static %}
+
+{% block title %}Fire Alert — FireGuard{% endblock %}
+
+{% block content %}
+<div class="ff-page ff-alert-detail">
+	<a href="{% url 'home' %}" class="ff-back-link">← Back to dashboard</a>
+
+	<div class="ff-hero">
+		<h1>Fire alert details</h1>
+		<p>Review the captured frame and incident metadata for this detection.</p>
+	</div>
+
+	{% for alert in uploadAlert %}
+	<div class="ff-panel">
+		<span class="ff-badge-fire">🔥 Forest fire detected</span>
+
+		<div class="mt-3 text-center">
+			<img class="ff-detection-img" src="{{ alert.image.url }}" alt="Forest fire detection"/>
+		</div>
+
+		<div class="ff-meta-grid">
+			<div class="ff-meta-item">
+				<div class="label">Zone / location</div>
+				<div class="value">{{ alert.location }}</div>
+			</div>
+			<div class="ff-meta-item">
+				<div class="label">Alert sent to</div>
+				<div class="value">{{ alert.alert_receiver }}</div>
+			</div>
+			<div class="ff-meta-item">
+				<div class="label">Detected at</div>
+				<div class="value">{{ alert.date_created|date:"Y-m-d H:i:s" }}</div>
+			</div>
+		</div>
+	</div>
+	{% empty %}
+	<div class="ff-panel ff-empty">
+		<div class="ff-empty-icon">🔥</div>
+		<p><strong>Alert not found</strong></p>
+		<p class="small">This fire alert may have been removed or the link is invalid.</p>
+		<a href="{% url 'home' %}" class="btn ff-btn-view mt-2">Return to dashboard</a>
+	</div>
+	{% endfor %}
+</div>
+{% endblock %}

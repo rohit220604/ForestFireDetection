@@ -1,0 +1,55 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Sign in — FireGuard</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Outfit:wght@600;700&display=swap" rel="stylesheet">
+	<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css" crossorigin="anonymous">
+	<link rel="stylesheet" type="text/css" href="{% static '/css/login.css' %}">
+	<link rel="stylesheet" type="text/css" href="{% static '/css/util.css' %}">
+	<link rel="stylesheet" type="text/css" href="{% static '/css/theme.css' %}">
+</head>
+<body class="ff-auth">
+	<div class="ff-auth-wrap">
+		<div class="ff-auth-card ff-auth">
+			<div class="ff-auth-header">
+				<div class="ff-brand-icon">🔥</div>
+				<h1>FireGuard</h1>
+				<p>Forest fire detection &amp; alert monitoring</p>
+			</div>
+			<form class="login100-form validate-form" method="POST" action="">
+				{% csrf_token %}
+				<span class="login100-form-title p-b-33" style="font-size: 1.1rem; color: var(--ff-text);">Sign in to your account</span>
+
+				<div class="wrap-input100 validate-input">
+					<input class="input100" type="text" name="username" placeholder="Username" required>
+				</div>
+				<div class="wrap-input100 rs1 validate-input">
+					<input class="input100" type="password" name="password" placeholder="Password" required>
+				</div>
+
+				<div class="container-login100-form-btn m-t-20 m-b-15">
+					<button class="login100-form-btn" type="submit">Sign in</button>
+				</div>
+
+				{% for message in messages %}
+				<p id="messages">{{ message }}</p>
+				{% endfor %}
+
+				<div class="text-center p-t-15 p-b-4">
+					<span class="txt1">Forgot</span>
+					<a href="{% url 'reset_password' %}" class="txt2 hov1">password?</a>
+				</div>
+				<div class="text-center">
+					<span class="txt1">New ranger account?</span>
+					<a href="{% url 'register' %}" class="txt2 hov1">Register</a>
+				</div>
+			</form>
+		</div>
+	</div>
+</body>
+</html>

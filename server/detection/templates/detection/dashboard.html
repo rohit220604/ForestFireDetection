@@ -1,0 +1,115 @@
+{% extends 'detection/main.html' %}
+{% load event_tags static %}
+
+{% block title %}Dashboard — FireGuard{% endblock %}
+
+{% block content %}
+<div class="ff-page">
+	<div class="ff-hero">
+		<h1>Fire Alerts Dashboard</h1>
+		<p>Monitor forest fire detections from your cameras. Filter by zone, recipient, or date.</p>
+	</div>
+
+	<div class="ff-stats">
+		<div class="ff-stat-card alert-active">
+			<div class="label">Active alerts</div>
+			<div class="value">{{ uploadAlert|length }}</div>
+		</div>
+		<div class="ff-stat-card">
+			<div class="label">System status</div>
+			<div class="value" style="font-size: 1.1rem;">Monitoring</div>
+		</div>
+	</div>
+
+	<div class="ff-panel ff-filter">
+		<div class="ff-panel-title">Search alerts</div>
+		<form method="get">
+			<div class="row align-items-end">
+				<div class="col-md-3 mb-2 mb-md-0">
+					<label class="small text-muted mb-1">Forest zone / location</label>
+					<input class="form-control" type="text" placeholder="e.g. North Ridge"
+						name="{{ myFilter.form.location.name }}"
+						id="{{ myFilter.form.location.id_for_label }}"
+						{% if myFilter.form.location.value != None %}value="{{ myFilter.form.location.value|stringformat:'s' }}"{% endif %}
+						maxlength="{{ myFilter.form.location.field.max_length }}">
+				</div>
+				<div class="col-md-3 mb-2 mb-md-0">
+					<label class="small text-muted mb-1">Notify email</label>
+					<input class="form-control" type="text" placeholder="recipient@email.com"
+						name="{{ myFilter.form.alert_receiver.name }}"
+						id="{{ myFilter.form.alert_receiver.id_for_label }}"
+						{% if myFilter.form.alert_receiver.value != None %}value="{{ myFilter.form.alert_receiver.value|stringformat:'s' }}"{% endif %}
+						maxlength="{{ myFilter.form.alert_receiver.field.max_length }}">
+				</div>
+				<div class="col-md-2 mb-2 mb-md-0">
+					<label class="small text-muted mb-1">From date</label>
+					<input class="form-control" type="text" id="start_date" placeholder="YYYY-MM-DD" autocomplete="off"
+						name="{{ myFilter.form.start_date.name }}"
+						{% if myFilter.form.start_date.value != None %}value="{{ myFilter.form.start_date.value|stringformat:'s' }}"{% endif %}>
+				</div>
+				<div class="col-md-2 mb-2 mb-md-0">
+					<label class="small text-muted mb-1">To date</label>
+					<input class="form-control" type="text" id="end_date" placeholder="YYYY-MM-DD" autocomplete="off"
+						name="{{ myFilter.form.end_date.name }}"
+						{% if myFilter.form.end_date.value != None %}value="{{ myFilter.form.end_date.value|stringformat:'s' }}"{% endif %}>
+				</div>
+				<div class="col-md-2">
+					<button class="btn ff-btn-search" type="submit">Search</button>
+				</div>
+			</div>
+		</form>
+	</div>
+
+	<div class="ff-panel">
+		<div class="ff-panel-title">Detected fires</div>
+		{% if uploadAlert %}
+		<div class="ff-table-wrap">
+			<table class="table ff-table mb-0">
+				<thead>
+					<tr>
+						<th>Fire capture</th>
+						<th>Zone / location</th>
+						<th>Notified</th>
+						<th>Detected at</th>
+						<th></th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for alert in uploadAlert %}
+					<tr>
+						<td>
+							<span class="ff-badge-fire">🔥 Fire detected</span><br>
+							<img class="ff-detection-img mt-1" src="{{ alert.image.url }}" alt="Fire detection frame"/>
+						</td>
+						<td><strong>{{ alert.location }}</strong></td>
+						<td>{{ alert.alert_receiver }}</td>
+						<td>{{ alert.date_created|date:"Y-m-d H:i:s" }}</td>
+						{% with uuid=alert.image|split:"." %}
+						<td><a class="btn ff-btn-view" href="/alert/{{ uuid.0 }}">View details</a></td>
+						{% endwith %}
+					</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+		</div>
+		{% else %}
+		<div class="ff-empty">
+			<div class="ff-empty-icon">🌲</div>
+			<p><strong>No fire alerts yet</strong></p>
+			<p class="small">When your detection system spots smoke or flames, alerts will appear here.</p>
+		</div>
+		{% endif %}
+	</div>
+</div>
+
+<script>
+jQuery(document).ready(function($){
+	var options = {
+		format: 'yyyy-mm-dd',
+		todayHighlight: true,
+		autoclose: true,
+	};
+	$('#start_date, #end_date').datepicker(options);
+});
+</script>
+{% endblock %}
