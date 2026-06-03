@@ -2,11 +2,12 @@ from alertupload_rest.serializers import UploadAlertSerializer
 from rest_framework.decorators import api_view
 from django.http import JsonResponse
 from threading import Thread
-from django.core.mail import send_mail
+from django.core.mail import send_mail, get_connection
 import re
 import logging
 from django.conf import settings
 
+SMTP_TIMEOUT_SECONDS = 15
 logger = logging.getLogger(__name__)
 EMAIL_PATTERN = re.compile(r'^[^@]+@[^@]+\.[^@]+$')
 
@@ -33,12 +34,23 @@ def _send_mail(subject, message, recipient):
             'SMTP not configured on server. In Render Environment set '
             'EMAIL_HOST_USER (your Gmail) and EMAIL_HOST_PASSWORD (Gmail app password).'
         )
+
+    connection = get_connection(
+        backend=settings.EMAIL_BACKEND,
+        host=settings.EMAIL_HOST,
+        port=settings.EMAIL_PORT,
+        username=settings.EMAIL_HOST_USER,
+        password=settings.EMAIL_HOST_PASSWORD,
+        use_tls=settings.EMAIL_USE_TLS,
+        timeout=SMTP_TIMEOUT_SECONDS,
+    )
     send_mail(
         subject,
         message,
         _from_email(),
         [recipient],
         fail_silently=False,
+        connection=connection,
     )
 
 
@@ -75,6 +87,31 @@ def post_detection_started(request):
     if not EMAIL_PATTERN.match(alert_receiver):
         return JsonResponse({'error': 'Invalid email address'}, status=400)
 
+    if not _smtp_configured():
+        return JsonResponse(
+            {
+                'success': False,
+                'email_queued': False,
+                'error': (
+                    'SMTP not configured on server. Add EMAIL_HOST_USER and '
+                    'EMAIL_HOST_PASSWORD in Render Environment, then redeploy.'
+                ),
+                'recipient': alert_receiver,
+            },
+            status=500,
+        )
+
+    send_detection_started_email_async(location, alert_receiver)
+    return JsonResponse({
+        'success': True,
+        'email_queued': True,
+        'recipient': alert_receiver,
+        'message': f'Notification email is being sent to {alert_receiver}.',
+    })
+
+
+@start_new_thread
+def send_detection_started_email_async(location, alert_receiver):
     try:
         _send_mail(
             'Forest Fire Monitoring Started — FireGuard',
@@ -85,22 +122,8 @@ def post_detection_started(request):
             alert_receiver,
         )
         logger.info('Detection started email sent to %s', alert_receiver)
-        return JsonResponse({
-            'success': True,
-            'email_sent': True,
-            'recipient': alert_receiver,
-        })
-    except Exception as exc:
+    except Exception:
         logger.exception('Failed to send detection started email to %s', alert_receiver)
-        return JsonResponse(
-            {
-                'success': False,
-                'email_sent': False,
-                'error': str(exc),
-                'recipient': alert_receiver,
-            },
-            status=500,
-        )
 
 
 @start_new_thread
