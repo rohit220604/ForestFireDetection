@@ -1,11 +1,12 @@
 from alertupload_rest.serializers import UploadAlertSerializer
-from rest_framework.response import Response
 from rest_framework.decorators import api_view
 from django.http import JsonResponse
 from threading import Thread
 from django.core.mail import send_mail
 import re
 from django.conf import settings
+
+EMAIL_PATTERN = re.compile(r'^[^@]+@[^@]+\.[^@]+$')
 
 def start_new_thread(function):
     def decorator(*args, **kwargs):
@@ -24,23 +25,57 @@ def post_alert(request):
     else:
         return JsonResponse({'error': 'Unable to process data'}, status=400)
 
+def _from_email():
+    return settings.EMAIL_HOST_USER or 'noreply@fireguard.local'
+
+
 def identify_email(data):
     alert_receiver = data.get('alert_receiver', '')
-    # Regex pattern for email only
-    email_pattern = re.compile(r'^[^@]+@[^@]+\.[^@]+$')
-
-    if email_pattern.match(alert_receiver):
+    if EMAIL_PATTERN.match(alert_receiver):
         print("Valid Email")
         send_email(data)
     else:
         print("Invalid Email")
+
+
+@api_view(['POST'])
+def post_detection_started(request):
+    location = request.data.get('location', '').strip()
+    alert_receiver = request.data.get('alert_receiver', '').strip()
+
+    if not location or not alert_receiver:
+        return JsonResponse(
+            {'error': 'location and alert_receiver are required'},
+            status=400,
+        )
+
+    if not EMAIL_PATTERN.match(alert_receiver):
+        return JsonResponse({'error': 'Invalid email address'}, status=400)
+
+    send_detection_started_email(location, alert_receiver)
+    return JsonResponse({'success': True})
+
+
+@start_new_thread
+def send_detection_started_email(location, alert_receiver):
+    send_mail(
+        'Forest Fire Monitoring Started — FireGuard',
+        (
+            f'Detection has been started at: {location}\n\n'
+            'You will receive another email if a possible forest fire is detected.'
+        ),
+        _from_email(),
+        [alert_receiver],
+        fail_silently=True,
+    )
+
 
 @start_new_thread
 def send_email(data):
     send_mail(
         'Forest Fire Detected — FireGuard Alert',
         prepare_alert_message(data),
-        'rjrohit2264@gmail.com',
+        _from_email(),
         [data['alert_receiver']],
         fail_silently=True,
     )

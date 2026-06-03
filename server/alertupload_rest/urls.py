@@ -7,6 +7,7 @@ from django.urls import path, include
 urlpatterns = [
     # Alert POST
     path('images/', views.post_alert, name='post_alert'),
+    path('detection-started/', views.post_detection_started, name='post_detection_started'),
 
     # Authentication
     url(r'^get_auth_token/$', rest_framework_views.obtain_auth_token, name='get_auth_token'),
