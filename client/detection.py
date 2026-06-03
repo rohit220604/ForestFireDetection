@@ -123,18 +123,23 @@ class Detection(QThread):
                 "location": self.location,
                 "alert_receiver": self.receiver,
             }
-            response = requests.post(url, headers=headers, data=data, timeout=30)
+            response = requests.post(url, headers=headers, data=data, timeout=45)
             try:
                 body = response.json()
             except ValueError:
                 body = {}
 
-            if response.ok and body.get('email_sent'):
-                print(f"Email delivered to {body.get('recipient', self.receiver)}")
-            elif response.ok:
+            recipient = body.get('recipient', self.receiver)
+            if response.ok and body.get('email_queued'):
                 print(
-                    "Server accepted request but email was NOT confirmed sent. "
-                    "Redeploy server with latest code."
+                    f"Email queued for {recipient} — check inbox/spam in 1–2 minutes."
+                )
+            elif response.ok and body.get('email_sent'):
+                print(f"Email sent to {recipient}")
+            elif response.status_code == 502:
+                print(
+                    "Server error (HTTP 502). Push latest server code and set "
+                    "EMAIL_HOST_USER + EMAIL_HOST_PASSWORD on Render, then redeploy."
                 )
             else:
                 err = body.get('error', response.text[:300])
