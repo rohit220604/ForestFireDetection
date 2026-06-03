@@ -4,9 +4,12 @@ from django.http import JsonResponse
 from threading import Thread
 from django.core.mail import send_mail
 import re
+import logging
 from django.conf import settings
 
+logger = logging.getLogger(__name__)
 EMAIL_PATTERN = re.compile(r'^[^@]+@[^@]+\.[^@]+$')
+
 
 def start_new_thread(function):
     def decorator(*args, **kwargs):
@@ -14,6 +17,30 @@ def start_new_thread(function):
         t.daemon = True
         t.start()
     return decorator
+
+
+def _from_email():
+    return settings.DEFAULT_FROM_EMAIL
+
+
+def _smtp_configured():
+    return bool(settings.EMAIL_HOST_USER and settings.EMAIL_HOST_PASSWORD)
+
+
+def _send_mail(subject, message, recipient):
+    if not _smtp_configured():
+        raise RuntimeError(
+            'SMTP not configured on server. In Render Environment set '
+            'EMAIL_HOST_USER (your Gmail) and EMAIL_HOST_PASSWORD (Gmail app password).'
+        )
+    send_mail(
+        subject,
+        message,
+        _from_email(),
+        [recipient],
+        fail_silently=False,
+    )
+
 
 @api_view(['POST'])
 def post_alert(request):
@@ -25,17 +52,13 @@ def post_alert(request):
     else:
         return JsonResponse({'error': 'Unable to process data'}, status=400)
 
-def _from_email():
-    return settings.EMAIL_HOST_USER or 'noreply@fireguard.local'
-
 
 def identify_email(data):
     alert_receiver = data.get('alert_receiver', '')
     if EMAIL_PATTERN.match(alert_receiver):
-        print("Valid Email")
-        send_email(data)
+        send_fire_alert_email_async(data)
     else:
-        print("Invalid Email")
+        logger.warning('Invalid alert_receiver email: %s', alert_receiver)
 
 
 @api_view(['POST'])
@@ -52,33 +75,47 @@ def post_detection_started(request):
     if not EMAIL_PATTERN.match(alert_receiver):
         return JsonResponse({'error': 'Invalid email address'}, status=400)
 
-    send_detection_started_email(location, alert_receiver)
-    return JsonResponse({'success': True})
+    try:
+        _send_mail(
+            'Forest Fire Monitoring Started — FireGuard',
+            (
+                f'Detection has been started at: {location}\n\n'
+                'You will receive another email if a possible forest fire is detected.'
+            ),
+            alert_receiver,
+        )
+        logger.info('Detection started email sent to %s', alert_receiver)
+        return JsonResponse({
+            'success': True,
+            'email_sent': True,
+            'recipient': alert_receiver,
+        })
+    except Exception as exc:
+        logger.exception('Failed to send detection started email to %s', alert_receiver)
+        return JsonResponse(
+            {
+                'success': False,
+                'email_sent': False,
+                'error': str(exc),
+                'recipient': alert_receiver,
+            },
+            status=500,
+        )
 
 
 @start_new_thread
-def send_detection_started_email(location, alert_receiver):
-    send_mail(
-        'Forest Fire Monitoring Started — FireGuard',
-        (
-            f'Detection has been started at: {location}\n\n'
-            'You will receive another email if a possible forest fire is detected.'
-        ),
-        _from_email(),
-        [alert_receiver],
-        fail_silently=True,
-    )
+def send_fire_alert_email_async(data):
+    recipient = data['alert_receiver']
+    try:
+        _send_mail(
+            'Forest Fire Detected — FireGuard Alert',
+            prepare_alert_message(data),
+            recipient,
+        )
+        logger.info('Fire alert email sent to %s', recipient)
+    except Exception:
+        logger.exception('Failed to send fire alert email to %s', recipient)
 
-
-@start_new_thread
-def send_email(data):
-    send_mail(
-        'Forest Fire Detected — FireGuard Alert',
-        prepare_alert_message(data),
-        _from_email(),
-        [data['alert_receiver']],
-        fail_silently=True,
-    )
 
 def prepare_alert_message(data):
     image_val = data.get('image', '')
@@ -86,12 +123,16 @@ def prepare_alert_message(data):
     if len(image_data) > 3:
         uuid = split(image_data[3], '/')
         if len(uuid) > 2:
-            url = 'https://surveilix.onrender.com/alert' + uuid[2]
+            url = 'https://forestfiredetection-y938.onrender.com/alert' + uuid[2]
         else:
-            url = 'https://surveilix.onrender.com/alert'
+            url = 'https://forestfiredetection-y938.onrender.com/alert'
     else:
-        url = 'https://surveilix.onrender.com/alert'
-    return 'A possible forest fire was detected. View the alert frame and details at ' + url
+        url = 'https://forestfiredetection-y938.onrender.com/alert'
+    return (
+        'A possible forest fire was detected. View the alert frame and details at '
+        + url
+    )
+
 
 def split(value, key):
     return str(value).split(key)

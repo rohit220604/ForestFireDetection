@@ -123,16 +123,24 @@ class Detection(QThread):
                 "location": self.location,
                 "alert_receiver": self.receiver,
             }
-            response = requests.post(url, headers=headers, data=data, timeout=15)
-            if response.ok:
-                print("Detection started email notification sent")
-            else:
+            response = requests.post(url, headers=headers, data=data, timeout=30)
+            try:
+                body = response.json()
+            except ValueError:
+                body = {}
+
+            if response.ok and body.get('email_sent'):
+                print(f"Email delivered to {body.get('recipient', self.receiver)}")
+            elif response.ok:
                 print(
-                    f"Unable to send detection started notification "
-                    f"(HTTP {response.status_code}): {response.text[:200]}"
+                    "Server accepted request but email was NOT confirmed sent. "
+                    "Redeploy server with latest code."
                 )
+            else:
+                err = body.get('error', response.text[:300])
+                print(f"Email NOT sent (HTTP {response.status_code}): {err}")
         except requests.RequestException as exc:
-            print(f"Unable to access server for start notification: {exc}")
+            print(f"Cannot reach server for email notification: {exc}")
 
     def run(self):
         self.running = True
