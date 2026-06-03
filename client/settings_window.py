@@ -26,7 +26,15 @@ class SettingsWindow(QMainWindow):
             if self.detection_window.isVisible():
                 print('Detection window is already open!')
             else:
-                self.detection_window.create_detection_instance(self.token, self.location_input.text(), self.sendTo_input.text())
+                cam1 = self.camera1_spinbox.value()
+                cam2 = self.camera2_spinbox.value()
+                self.detection_window.create_detection_instance(
+                    self.token,
+                    self.location_input.text(),
+                    self.sendTo_input.text(),
+                    cam1,
+                    cam2,
+                )
                 self.detection_window.start_detection()
 
     def closeEvent(self, event):
