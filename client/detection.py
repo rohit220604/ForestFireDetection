@@ -130,16 +130,17 @@ class Detection(QThread):
                 body = {}
 
             recipient = body.get('recipient', self.receiver)
-            if response.ok and body.get('email_queued'):
-                print(
-                    f"Email queued for {recipient} — check inbox/spam in 1–2 minutes."
-                )
-            elif response.ok and body.get('email_sent'):
+            if response.ok and body.get('email_sent'):
                 print(f"Email sent to {recipient}")
+            elif response.ok and body.get('email_queued'):
+                print(
+                    "Email request queued on server; delivery not confirmed yet. "
+                    "Check inbox/spam in 1–2 minutes."
+                )
             elif response.status_code == 502:
                 print(
-                    "Server error (HTTP 502). Push latest server code and set "
-                    "EMAIL_HOST_USER + EMAIL_HOST_PASSWORD on Render, then redeploy."
+                    "Server could not send email (HTTP 502). Verify SMTP credentials "
+                    "on the server and check server logs for details."
                 )
             else:
                 err = body.get('error', response.text[:300])

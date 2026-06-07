@@ -35,16 +35,8 @@ def _send_mail(subject, message, recipient):
             'EMAIL_HOST_USER (your Gmail) and EMAIL_HOST_PASSWORD (Gmail app password).'
         )
 
-    connection = get_connection(
-        backend=settings.EMAIL_BACKEND,
-        host=settings.EMAIL_HOST,
-        port=settings.EMAIL_PORT,
-        username=settings.EMAIL_HOST_USER,
-        password=settings.EMAIL_HOST_PASSWORD,
-        use_tls=settings.EMAIL_USE_TLS,
-        timeout=SMTP_TIMEOUT_SECONDS,
-    )
-    send_mail(
+    connection = get_connection(timeout=SMTP_TIMEOUT_SECONDS)
+    sent_count = send_mail(
         subject,
         message,
         _from_email(),
@@ -52,6 +44,12 @@ def _send_mail(subject, message, recipient):
         fail_silently=False,
         connection=connection,
     )
+    if sent_count != 1:
+        raise RuntimeError(
+            f'SMTP server did not accept the email for {recipient}.'
+        )
+
+    return sent_count
 
 
 @api_view(['POST'])
@@ -101,17 +99,6 @@ def post_detection_started(request):
             status=500,
         )
 
-    send_detection_started_email_async(location, alert_receiver)
-    return JsonResponse({
-        'success': True,
-        'email_queued': True,
-        'recipient': alert_receiver,
-        'message': f'Notification email is being sent to {alert_receiver}.',
-    })
-
-
-@start_new_thread
-def send_detection_started_email_async(location, alert_receiver):
     try:
         _send_mail(
             'Forest Fire Monitoring Started — FireGuard',
@@ -121,9 +108,33 @@ def send_detection_started_email_async(location, alert_receiver):
             ),
             alert_receiver,
         )
-        logger.info('Detection started email sent to %s', alert_receiver)
-    except Exception:
-        logger.exception('Failed to send detection started email to %s', alert_receiver)
+    except Exception as exc:
+        logger.error(
+            'Failed to send detection started email to %s — %s: %s',
+            alert_receiver,
+            type(exc).__name__,
+            exc,
+        )
+        return JsonResponse(
+            {
+                'success': False,
+                'email_sent': False,
+                'error': (
+                    'Unable to send email notification. '
+                    f'{type(exc).__name__}: {exc}'
+                ),
+                'recipient': alert_receiver,
+            },
+            status=502,
+        )
+
+    logger.info('Detection started email sent to %s', alert_receiver)
+    return JsonResponse({
+        'success': True,
+        'email_sent': True,
+        'recipient': alert_receiver,
+        'message': f'Notification email sent to {alert_receiver}.',
+    })
 
 
 @start_new_thread
@@ -136,8 +147,13 @@ def send_fire_alert_email_async(data):
             recipient,
         )
         logger.info('Fire alert email sent to %s', recipient)
-    except Exception:
-        logger.exception('Failed to send fire alert email to %s', recipient)
+    except Exception as exc:
+        logger.error(
+            'Failed to send fire alert email to %s — %s: %s',
+            recipient,
+            type(exc).__name__,
+            exc,
+        )
 
 
 def prepare_alert_message(data):
