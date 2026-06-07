@@ -138,9 +138,9 @@ class Detection(QThread):
                     "Check inbox/spam in 1–2 minutes."
                 )
             elif response.status_code == 502:
+                err = body.get('error', response.text[:300])
                 print(
-                    "Server could not send email (HTTP 502). Verify SMTP credentials "
-                    "on the server and check server logs for details."
+                    f"Server could not send email (HTTP 502): {err}"
                 )
             else:
                 err = body.get('error', response.text[:300])

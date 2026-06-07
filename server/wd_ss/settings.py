@@ -111,10 +111,34 @@ STATICFILES_DIRS = [
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
+def _env_bool(name, default=False):
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return str(raw).strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
+EMAIL_BACKEND = os.environ.get(
+    'EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend'
+)
+EMAIL_PROVIDER = os.environ.get('EMAIL_PROVIDER', 'smtp').strip().lower()
+EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
+EMAIL_USE_TLS = _env_bool('EMAIL_USE_TLS', True)
+EMAIL_USE_SSL = _env_bool('EMAIL_USE_SSL', False)
+EMAIL_TIMEOUT = int(os.environ.get('EMAIL_TIMEOUT', '30'))
+
+if EMAIL_USE_TLS and EMAIL_USE_SSL:
+    raise ValueError('Set either EMAIL_USE_TLS or EMAIL_USE_SSL, not both.')
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '').replace(' ', '')
-DEFAULT_FROM_EMAIL = EMAIL_HOST_USER or 'noreply@fireguard.local'
+DEFAULT_FROM_EMAIL = os.environ.get(
+    'DEFAULT_FROM_EMAIL', EMAIL_HOST_USER or 'noreply@fireguard.local'
+)
+RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '').strip()
+RESEND_API_URL = os.environ.get('RESEND_API_URL', 'https://api.resend.com/emails').strip()
+SENDGRID_API_KEY = os.environ.get('SENDGRID_API_KEY', '').strip()
+SENDGRID_API_URL = os.environ.get(
+    'SENDGRID_API_URL',
+    'https://api.sendgrid.com/v3/mail/send',
+).strip()

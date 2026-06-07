@@ -5,9 +5,11 @@ from threading import Thread
 from django.core.mail import send_mail, get_connection
 import re
 import logging
+import requests
 from django.conf import settings
 
-SMTP_TIMEOUT_SECONDS = 15
+MAIL_TIMEOUT_SECONDS = max(int(getattr(settings, 'EMAIL_TIMEOUT', 30)), 1)
+PROVIDER_ERROR_PREVIEW_CHARS = 300
 logger = logging.getLogger(__name__)
 EMAIL_PATTERN = re.compile(r'^[^@]+@[^@]+\.[^@]+$')
 
@@ -23,23 +25,152 @@ def start_new_thread(function):
 def _from_email():
     return settings.DEFAULT_FROM_EMAIL
 
+def _mail_provider():
+    return str(getattr(settings, 'EMAIL_PROVIDER', 'smtp') or 'smtp').strip().lower()
+
 
 def _smtp_configured():
     return bool(settings.EMAIL_HOST_USER and settings.EMAIL_HOST_PASSWORD)
 
+def _mail_provider_configured():
+    provider = _mail_provider()
+    if provider == 'smtp':
+        return _smtp_configured()
+    if provider == 'resend':
+        return bool(str(getattr(settings, 'RESEND_API_KEY', '')).strip())
+    if provider == 'sendgrid':
+        return bool(str(getattr(settings, 'SENDGRID_API_KEY', '')).strip())
+    return False
 
-def _send_mail(subject, message, recipient):
-    if not _smtp_configured():
-        raise RuntimeError(
+
+def _missing_mail_configuration_message():
+    provider = _mail_provider()
+    if provider == 'smtp':
+        return (
             'SMTP not configured on server. In Render Environment set '
             'EMAIL_HOST_USER (your Gmail) and EMAIL_HOST_PASSWORD (Gmail app password).'
         )
+    if provider == 'resend':
+        return (
+            'Resend not configured on server. Set EMAIL_PROVIDER=resend, '
+            'RESEND_API_KEY, and DEFAULT_FROM_EMAIL (verified sender).'
+        )
+    if provider == 'sendgrid':
+        return (
+            'SendGrid not configured on server. Set EMAIL_PROVIDER=sendgrid, '
+            'SENDGRID_API_KEY, and DEFAULT_FROM_EMAIL (verified sender).'
+        )
+    return (
+        f'Unsupported EMAIL_PROVIDER "{provider}". '
+        'Use one of: smtp, resend, sendgrid.'
+    )
 
-    connection = get_connection(timeout=SMTP_TIMEOUT_SECONDS)
+
+def _provider_error_detail(response):
+    try:
+        payload = response.json()
+        if isinstance(payload, dict):
+            text = payload.get('message') or payload.get('error') or str(payload)
+        else:
+            text = str(payload)
+    except ValueError:
+        text = response.text
+    return str(text)[:PROVIDER_ERROR_PREVIEW_CHARS]
+
+
+def _send_mail_via_resend(subject, message, recipient, sender):
+    endpoint = str(
+        getattr(settings, 'RESEND_API_URL', 'https://api.resend.com/emails')
+    ).strip()
+    api_key = str(getattr(settings, 'RESEND_API_KEY', '')).strip()
+    headers = {
+        'Authorization': f'Bearer {api_key}',
+        'Content-Type': 'application/json',
+    }
+    payload = {
+        'from': sender,
+        'to': [recipient],
+        'subject': subject,
+        'text': message,
+    }
+    try:
+        response = requests.post(
+            endpoint,
+            headers=headers,
+            json=payload,
+            timeout=MAIL_TIMEOUT_SECONDS,
+        )
+    except requests.RequestException as exc:
+        raise RuntimeError(f'Resend API request failed: {exc}') from exc
+
+    if response.status_code >= 400:
+        detail = _provider_error_detail(response)
+        raise RuntimeError(
+            f'Resend API rejected email ({response.status_code}): {detail}'
+        )
+
+    return 1
+
+
+def _send_mail_via_sendgrid(subject, message, recipient, sender):
+    endpoint = str(
+        getattr(settings, 'SENDGRID_API_URL', 'https://api.sendgrid.com/v3/mail/send')
+    ).strip()
+    api_key = str(getattr(settings, 'SENDGRID_API_KEY', '')).strip()
+    headers = {
+        'Authorization': f'Bearer {api_key}',
+        'Content-Type': 'application/json',
+    }
+    payload = {
+        'personalizations': [{'to': [{'email': recipient}]}],
+        'from': {'email': sender},
+        'subject': subject,
+        'content': [{'type': 'text/plain', 'value': message}],
+    }
+    try:
+        response = requests.post(
+            endpoint,
+            headers=headers,
+            json=payload,
+            timeout=MAIL_TIMEOUT_SECONDS,
+        )
+    except requests.RequestException as exc:
+        raise RuntimeError(f'SendGrid API request failed: {exc}') from exc
+
+    if response.status_code not in (200, 202):
+        detail = _provider_error_detail(response)
+        raise RuntimeError(
+            f'SendGrid API rejected email ({response.status_code}): {detail}'
+        )
+
+    return 1
+
+
+def _send_mail(subject, message, recipient):
+    if not _mail_provider_configured():
+        raise RuntimeError(_missing_mail_configuration_message())
+
+    sender = str(_from_email()).strip()
+    if not EMAIL_PATTERN.match(sender):
+        raise RuntimeError(
+            'DEFAULT_FROM_EMAIL is invalid. Set it to a valid sender email address.'
+        )
+
+    provider = _mail_provider()
+    if provider == 'resend':
+        return _send_mail_via_resend(subject, message, recipient, sender)
+    if provider == 'sendgrid':
+        return _send_mail_via_sendgrid(subject, message, recipient, sender)
+    if provider != 'smtp':
+        raise RuntimeError(
+            f'Unsupported EMAIL_PROVIDER "{provider}". Use smtp, resend, sendgrid.'
+        )
+
+    connection = get_connection(timeout=MAIL_TIMEOUT_SECONDS)
     sent_count = send_mail(
         subject,
         message,
-        _from_email(),
+        sender,
         [recipient],
         fail_silently=False,
         connection=connection,
@@ -85,15 +216,12 @@ def post_detection_started(request):
     if not EMAIL_PATTERN.match(alert_receiver):
         return JsonResponse({'error': 'Invalid email address'}, status=400)
 
-    if not _smtp_configured():
+    if not _mail_provider_configured():
         return JsonResponse(
             {
                 'success': False,
-                'email_queued': False,
-                'error': (
-                    'SMTP not configured on server. Add EMAIL_HOST_USER and '
-                    'EMAIL_HOST_PASSWORD in Render Environment, then redeploy.'
-                ),
+                'email_sent': False,
+                'error': _missing_mail_configuration_message(),
                 'recipient': alert_receiver,
             },
             status=500,
